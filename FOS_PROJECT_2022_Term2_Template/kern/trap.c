@@ -445,20 +445,65 @@ void table_fault_handler(struct Env * curenv, uint32 fault_va)
 
 }
 
+void placement(struct Env * curenv, uint32 fault_va)
+{
+	struct Frame_Info* fPTR;
+	allocate_frame(&fPTR);
+	map_frame(curenv->env_page_directory, fPTR, (void*)fault_va, PERM_USER|PERM_WRITEABLE);
+
+	if(pf_read_env_page(curenv, (void*)fault_va) == E_PAGE_NOT_EXIST_IN_PF) {
+		fault_va = ROUNDDOWN(fault_va,PAGE_SIZE);
+		if((fault_va >= USER_HEAP_MAX) && (fault_va < USTACKTOP)) {
+			pf_add_empty_env_page(curenv, fault_va, 1);
+		}
+		else {
+			cprintf("\t=>Page doesn't Exist\n");
+			return;
+		}
+	}
+
+	for(int i=0; i < curenv->page_WS_max_size; i++) {
+		if(env_page_ws_is_entry_empty(curenv, i)) {
+			env_page_ws_set_entry(curenv, i, fault_va);
+			curenv->page_last_WS_index = i+1;
+
+			if(curenv->page_last_WS_index == curenv->page_WS_max_size)
+				curenv->page_last_WS_index = 0;
+			break;
+		}
+	}
+}
+
+
 //Handle the page fault
 
 void page_fault_handler(struct Env * curenv, uint32 fault_va)
 {
 	//TODO: [PROJECT 2022 - [6] PAGE FAULT HANDLER]
 	// Write your code here, remove the panic and write your code
-	panic("page_fault_handler() is not implemented yet...!!");
+	//panic("page_fault_handler() is not implemented yet...!!");
 
 	//refer to the project presentation and documentation for details
 
+	if (env_page_ws_get_size(curenv) < curenv->page_WS_max_size)
+		placement(curenv, fault_va);
+	else {
+		uint32 vAdd = env_page_ws_get_virtual_address(curenv, curenv->page_last_WS_index);
+
+		if(pt_get_page_permissions(curenv, vAdd) & PERM_MODIFIED) {
+			uint32* ptr;
+			struct Frame_Info* f = get_frame_info(curenv->env_page_directory, (void*)vAdd, &ptr);
+			pf_update_env_page(curenv, (void*)vAdd, f);
+			unmap_frame(curenv->env_page_directory, (void*)vAdd);
+		}
+		else
+			unmap_frame(curenv->env_page_directory, (void*)vAdd);
+
+		env_page_ws_clear_entry(curenv, curenv->page_last_WS_index);
+		placement(curenv, fault_va);
+	}
 
 	//TODO: [PROJECT 2022 - BONUS4] Change WS Size according to Program Priority‌
-
-
 }
 
 void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va)
