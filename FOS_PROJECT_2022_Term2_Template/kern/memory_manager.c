@@ -730,11 +730,15 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT 2022 - [10] User Heap] allocateMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("allocateMem() is not implemented yet...!!");
+	//panic("allocateMem() is not implemented yet...!!");
 
 	//This function should allocate ALL pages of the required range in the PAGE FILE
 	//and allocate NOTHING in the main memory
 
+	size = ROUNDUP(size, PAGE_SIZE);
+	for(int i=virtual_address; i<(virtual_address + size); i += PAGE_SIZE) {
+		pf_add_empty_env_page(e, i, 1);
+	}
 }
 
 
@@ -742,10 +746,9 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 
 void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-
 	//TODO: [PROJECT 2022 - [12] User Heap] freeMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("freeMem() is not implemented yet...!!");
+	//panic("freeMem() is not implemented yet...!!");
 
 	//This function should:
 	//1. Free ALL pages of the given range from the Page File
@@ -753,6 +756,34 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
 	//   remember that the page table was created using kmalloc so it should be removed using kfree()
 
+	for(int i=virtual_address; i<(virtual_address + size); i += PAGE_SIZE) {
+		pf_remove_env_page(e, i);
+
+		for(int j=0; j < e->page_WS_max_size; j++) {
+			if(e->ptr_pageWorkingSet[i].virtual_address == j) {
+				env_page_ws_clear_entry(e, i);
+				unmap_frame(e->env_page_directory, (void*)i);
+				break;
+			}
+		}
+
+		uint32* ptrPT = NULL;
+		get_page_table(e->env_page_directory, (void*)i, &ptrPT);
+		int x = 0;
+		if(ptrPT != NULL) {
+			for(int j=0; j < 1024; j++) {
+				x = 0;
+				if(ptrPT[j] != 0) {
+					x = 1;
+					break;
+				}
+			}
+			if(x == 0) {
+				kfree((void*)ptrPT);
+				e->env_page_directory[PDX(i)] = 0;
+			}
+		}
+	}
 }
 
 void __freeMem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)
