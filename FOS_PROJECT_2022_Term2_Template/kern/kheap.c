@@ -95,12 +95,20 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 {
 	//TODO: [PROJECT 2022 - [3] Kernel Heap] kheap_virtual_address()
 	// Write your code here, remove the panic and write your code
-	panic("kheap_virtual_address() is not implemented yet...!!");
+	//panic("kheap_virtual_address() is not implemented yet...!!");
 
 	//return the virtual address corresponding to given physical_address
 	//refer to the project presentation and documentation for details
 
 	//change this "return" according to your answer
+
+	struct Frame_Info* phyAddFrame = to_frame_info(physical_address);
+	for(uint32 i = KERNEL_HEAP_START; i < startAdd; i += PAGE_SIZE) {
+		uint32* framePTR = NULL;
+		if(phyAddFrame == get_frame_info(ptr_page_directory,(void*)i,&framePTR)) {
+			return i;
+		}
+	}
 
 	return 0;
 }
@@ -109,12 +117,22 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 {
 	//TODO: [PROJECT 2022 - [4] Kernel Heap] kheap_physical_address()
 	// Write your code here, remove the panic and write your code
-	panic("kheap_physical_address() is not implemented yet...!!");
+	//panic("kheap_physical_address() is not implemented yet...!!");
 
 	//return the physical address corresponding to given virtual_address
 	//refer to the project presentation and documentation for details
 
 	//change this "return" according to your answer
+
+	uint32 *ptPTR = NULL;
+	get_page_table(ptr_page_directory,(uint32*)virtual_address,&ptPTR);
+	if(ptPTR == NULL ) {
+		return -1;
+	}
+
+	if((ptPTR[PTX(virtual_address)] & PERM_PRESENT) != 0) {
+		return ((ptPTR[PTX(virtual_address)] & 0xFFFFF000) + (virtual_address & 0x00000FFF));
+	}
+
 	return 0;
 }
-
