@@ -126,11 +126,8 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 
 	uint32 *ptPTR = NULL;
 	get_page_table(ptr_page_directory,(uint32*)virtual_address,&ptPTR);
-	if(ptPTR == NULL ) {
-		return -1;
-	}
 
-	if((ptPTR[PTX(virtual_address)] & PERM_PRESENT) != 0) {
+	if((ptPTR != NULL) && ((ptPTR[PTX(virtual_address)] & PERM_PRESENT) != 0)) {
 		return ((ptPTR[PTX(virtual_address)] & 0xFFFFF000) + (virtual_address & 0x00000FFF));
 	}
 
