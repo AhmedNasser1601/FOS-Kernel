@@ -88,8 +88,7 @@ struct Env* find_env_in_queue(struct Env_Queue* queue, uint32 envID)
 //============================= REQUIRED FUNCTIONS =================================//
 //==================================================================================//
 
-void sched_init_MLFQ(uint8 numOfLevels, uint8 *quantumOfEachLevel)
-{
+void sched_init_MLFQ(uint8 numOfLevels, uint8 *quantumOfEachLevel) {
 	//=========================================
 	//DON'T CHANGE THESE LINES=================
 	sched_delete_ready_queues();
@@ -108,8 +107,7 @@ void sched_init_MLFQ(uint8 numOfLevels, uint8 *quantumOfEachLevel)
 }
 
 
-struct Env* fos_scheduler_MLFQ()
-{
+struct Env* fos_scheduler_MLFQ() {
 	//TODO: [PROJECT 2022 [8] CPU Scheduling MLFQ] MLFQ Scheduler
 	// Write your code here, remove the panic and write your code
 	panic("fos_scheduler_MLFQ() is not implemented yet...!!");
