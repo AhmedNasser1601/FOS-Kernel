@@ -1,6 +1,9 @@
 
 #include <inc/lib.h>
 
+#define Mega (1024*1024)
+#define kilo (1024)
+
 // malloc()
 //	This function use NEXT FIT strategy to allocate space in heap
 //  with the given size and return void pointer to the start of the allocated space
@@ -18,11 +21,20 @@
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
-void* malloc(uint32 size)
-{
+uint32 startAdd = USER_HEAP_START;
+int idx = 0;
+
+uint32 hFreeArr[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE];
+
+struct UserHEAP {
+	uint32 first;
+	int size;
+} uHeapArr[kilo];
+
+void* malloc(uint32 size) {
 	//TODO: [PROJECT 2022 - [9] User Heap malloc()] [User Side]
 	// Write your code here, remove the panic and write your code
-	panic("malloc() is not implemented yet...!!");
+	//panic("malloc() is not implemented yet...!!");
 
 	// Steps:
 	//	1) Implement NEXT FIT strategy to search the heap for suitable space
@@ -31,7 +43,36 @@ void* malloc(uint32 size)
 	//	 Else,
 	//	3) Call sys_allocateMem to invoke the Kernel for allocation
 	// 	4) Return pointer containing the virtual address of allocated space,
-	//
+
+	if(sys_isUHeapPlacementStrategyNEXTFIT()) {
+		uHeapArr[idx].size = ROUNDUP(size, PAGE_SIZE);
+		uint32 maxSize = startAdd+size;
+		int flag=0;
+
+		if (uHeapArr[idx].size<maxSize && uHeapArr[idx].size!=0) {
+			for(int i=0; i<((USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE); i++) {
+				flag++;
+				if(hFreeArr[i] != 0) {
+					flag=0;
+				}
+
+				if(flag == (uHeapArr[idx].size/PAGE_SIZE)) {
+					uint32 rem = i-(uHeapArr[idx].size/PAGE_SIZE);
+
+					for(int j=rem; j<=i; j++) {
+						hFreeArr[j] = 1;
+					}
+
+					uHeapArr[idx].first = startAdd = USER_HEAP_START+((rem+1)*PAGE_SIZE);
+
+					sys_allocateMem(uHeapArr[idx].first, uHeapArr[idx].size);
+
+					idx++;
+					return (void*)startAdd;
+				}
+			}
+		}
+	}
 
 	//This function should find the space of the required range
 	// ******** ON 4KB BOUNDARY ******************* //
@@ -65,8 +106,7 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 //		"memory_manager.c", then switch back to the user mode here
 //	the freeMem function is empty, make sure to implement it.
 
-void free(void* virtual_address)
-{
+void free(void* virtual_address) {
 	//TODO: [PROJECT 2022 - [11] User Heap free()] [User Side]
 	// Write your code here, remove the panic and write your code
 	panic("free() is not implemented yet...!!");
@@ -101,8 +141,7 @@ void sfree(void* virtual_address)
 //		in "memory_manager.c", then switch back to the user mode here
 //	the moveMem function is empty, make sure to implement it.
 
-void *realloc(void *virtual_address, uint32 new_size)
-{
+void *realloc(void *virtual_address, uint32 new_size) {
 	//TODO: [PROJECT 2022 - BONUS3] User Heap Realloc [User Side]
 	// Write your code here, remove the panic and write your code
 	panic("realloc() is not implemented yet...!!");
