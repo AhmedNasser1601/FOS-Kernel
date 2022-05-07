@@ -1,4 +1,4 @@
-/* See COPYRIGHT for copyright information. */
+ /* See COPYRIGHT for copyright information. */
 
 #include <inc/x86.h>
 #include <inc/mmu.h>
@@ -114,7 +114,9 @@ DECLARE_START_OF(tst_freeing_stack);
 DECLARE_START_OF(tst_CPU_MLFQ_master_1);
 DECLARE_START_OF(tst_CPU_MLFQ_slave_1_1);
 DECLARE_START_OF(tst_CPU_MLFQ_slave_1_2);
-
+DECLARE_START_OF(tst_free_1);
+DECLARE_START_OF(tst_free_2);
+DECLARE_START_OF(tst_free_3);
 
 DECLARE_START_OF(ef_fos_fibonacci);
 DECLARE_START_OF(ef_fos_factorial);
@@ -151,6 +153,8 @@ struct UserProgramInfo userPrograms[] = {
 		{ "tm1", "tests malloc (1): start address & allocated frames", PTR_START_OF(tst_malloc_1)},
 		{ "tm2", "tests malloc (2): writing & reading values in allocated spaces", PTR_START_OF(tst_malloc_2)},
 		{ "tm3", "tests malloc (3): check memory allocation and WS after accessing", PTR_START_OF(tst_malloc_3)},
+		{ "tf1", "tests free (1): freeing tables, WS and page file [placement case]", PTR_START_OF(tst_free_1)},
+		{ "tf2", "tests free (2): try accessing values in freed spaces", PTR_START_OF(tst_free_2)},
 
 		{ "tnf", "tests next fit: all cases", PTR_START_OF(tst_nextfit)},
 
@@ -713,8 +717,7 @@ void start_env_free(struct Env *e)
 		env_free(e);
 	}
 }
-void env_free(struct Env *e)
-{
+void env_free(struct Env *e) {
 	//TODO: [PROJECT 2022 - BONUS 2] Exit [env_free()]
 
 	//YOUR CODE STARTS HERE, remove the panic and write your code ----
