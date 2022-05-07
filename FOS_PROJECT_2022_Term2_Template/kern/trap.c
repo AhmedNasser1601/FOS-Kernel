@@ -445,8 +445,7 @@ void table_fault_handler(struct Env * curenv, uint32 fault_va)
 
 }
 
-void placement(struct Env * curenv, uint32 fault_va)
-{
+void placement(struct Env * curenv, uint32 fault_va) {
 	struct Frame_Info* fPTR;
 	allocate_frame(&fPTR);
 	map_frame(curenv->env_page_directory, fPTR, (void*)fault_va, PERM_USER|PERM_WRITEABLE);
@@ -477,8 +476,7 @@ void placement(struct Env * curenv, uint32 fault_va)
 
 //Handle the page fault
 
-void page_fault_handler(struct Env * curenv, uint32 fault_va)
-{
+void page_fault_handler(struct Env * curenv, uint32 fault_va) {
 	//TODO: [PROJECT 2022 - [6] PAGE FAULT HANDLER]
 	// Write your code here, remove the panic and write your code
 	//panic("page_fault_handler() is not implemented yet...!!");
