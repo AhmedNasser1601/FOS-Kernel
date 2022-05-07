@@ -25,6 +25,9 @@ FUNCTIONS:	to_physical_address, get_frame_info, tlb_invalidate
 #include <kern/kheap.h>
 #include <kern/file_manager.h>
 
+#define Mega (1024*1024)
+#define kilo (1024)
+
 extern uint32 number_of_frames;	// Amount of physical memory (in frames_info)
 extern uint32 size_of_base_mem;		// Amount of base memory (in bytes)
 extern uint32 size_of_extended_mem;		// Amount of extended memory (in bytes)
@@ -532,11 +535,10 @@ int get_page_table(uint32 *ptr_page_directory, const void *virtual_address, uint
 	}
 }
 
-void * create_page_table(uint32 *ptr_page_directory, const uint32 virtual_address)
-{
+void * create_page_table(uint32 *ptr_page_directory, const uint32 virtual_address) {
 	//TODO: [PROJECT 2022 -[5] Kernel Dynamic Allocation] create_page_table()
 	// Write your code here, remove the panic and write your code
-	panic("create_page_table() is not implemented yet...!!");
+	//panic("create_page_table() is not implemented yet...!!");
 
 	//Use kmalloc() to create a new page TABLE for the given virtual address,
 	//Use CONSTRUCT_ENTRY() to build the table entry then link it to the given directory
@@ -545,9 +547,18 @@ void * create_page_table(uint32 *ptr_page_directory, const uint32 virtual_addres
 	//	a.	clear all entries (as it may contain garbage data)
 	//	b.	clear the TLB cache (using "tlbflush()")
 	//change this "return" according to your answer
-	return NULL;
-}
 
+	uint32* newPT = kmalloc(PAGE_SIZE);
+	uint32 phyAdd = kheap_physical_address((uint32)newPT);
+	ptr_page_directory[PDX(virtual_address)] = phyAdd|PERM_PRESENT|PERM_WRITEABLE|PERM_USER;
+
+	for(int i=0; i < kilo; i++) {
+		newPT[i] = 0;
+	}
+
+	tlbflush();
+	return newPT;
+}
 
 
 void __static_cpt(uint32 *ptr_page_directory, const uint32 virtual_address, uint32 **ptr_page_table)
@@ -726,8 +737,7 @@ int loadtime_map_frame(uint32 *ptr_page_directory, struct Frame_Info *ptr_frame_
 //======================================================
 
 // [10] allocateMem
-void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
-{
+void allocateMem(struct Env* e, uint32 virtual_address, uint32 size) {
 	//TODO: [PROJECT 2022 - [10] User Heap] allocateMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
 	//panic("allocateMem() is not implemented yet...!!");
@@ -744,8 +754,7 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 
 // [12] freeMem
 
-void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
-{
+void freeMem(struct Env* e, uint32 virtual_address, uint32 size) {
 	//TODO: [PROJECT 2022 - [12] User Heap] freeMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
 	//panic("freeMem() is not implemented yet...!!");
@@ -771,7 +780,7 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 		get_page_table(e->env_page_directory, (void*)i, &ptrPT);
 		int x = 0;
 		if(ptrPT != NULL) {
-			for(int j=0; j < 1024; j++) {
+			for(int j=0; j < kilo; j++) {
 				x = 0;
 				if(ptrPT[j] != 0) {
 					x = 1;
@@ -804,8 +813,7 @@ void __freeMem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size
 //================= [BONUS] =====================
 // [3] moveMem
 
-void moveMem(struct Env* e, uint32 src_virtual_address, uint32 dst_virtual_address, uint32 size)
-{
+void moveMem(struct Env* e, uint32 src_virtual_address, uint32 dst_virtual_address, uint32 size) {
 	//TODO: [PROJECT 2022 - BONUS3] User Heap Realloc [Kernel Side]
 	//your code is here, remove the panic and write your code
 	panic("moveMem() is not implemented yet...!!");
