@@ -765,31 +765,34 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size) {
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
 	//   remember that the page table was created using kmalloc so it should be removed using kfree()
 
-	for(int i=virtual_address; i<(virtual_address + size); i += PAGE_SIZE) {
+	virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	uint32* ptrPT = NULL;
+
+	for(uint32 i=virtual_address ; i<virtual_address+size; i+=PAGE_SIZE) {
 		pf_remove_env_page(e, i);
 
-		for(int j=0; j < e->page_WS_max_size; j++) {
-			if(e->ptr_pageWorkingSet[i].virtual_address == j) {
-				env_page_ws_clear_entry(e, i);
+		for(int j=0; j<e->page_WS_max_size; j++) {
+			if(i == env_page_ws_get_virtual_address(e, j)) {
 				unmap_frame(e->env_page_directory, (void*)i);
+				env_page_ws_clear_entry(e, j);
 				break;
 			}
 		}
 
-		uint32* ptrPT = NULL;
 		get_page_table(e->env_page_directory, (void*)i, &ptrPT);
-		int x = 0;
+		int x = 1;
+
 		if(ptrPT != NULL) {
-			for(int j=0; j < kilo; j++) {
-				x = 0;
+			for(int j=0; j<kilo; j++) {
 				if(ptrPT[j] != 0) {
-					x = 1;
+					x = 0;
 					break;
 				}
 			}
-			if(x == 0) {
+
+			if(x == 1) {
+				e->env_page_directory[PDX(i)]=0;
 				kfree((void*)ptrPT);
-				e->env_page_directory[PDX(i)] = 0;
 			}
 		}
 	}
