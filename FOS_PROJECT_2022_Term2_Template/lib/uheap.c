@@ -29,7 +29,7 @@ uint32 hFreeArr[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE];
 struct UserHEAP {
 	uint32 first;
 	int size;
-} uHeapArr[kilo];
+} uHeapArr[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE];
 
 void* malloc(uint32 size) {
 	//TODO: [PROJECT 2022 - [9] User Heap malloc()] [User Side]
@@ -43,6 +43,7 @@ void* malloc(uint32 size) {
 	//	 Else,
 	//	3) Call sys_allocateMem to invoke the Kernel for allocation
 	// 	4) Return pointer containing the virtual address of allocated space,
+
 
 	if(sys_isUHeapPlacementStrategyNEXTFIT()) {
 		uHeapArr[idx].size = ROUNDUP(size, PAGE_SIZE);
@@ -109,12 +110,23 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 void free(void* virtual_address) {
 	//TODO: [PROJECT 2022 - [11] User Heap free()] [User Side]
 	// Write your code here, remove the panic and write your code
-	panic("free() is not implemented yet...!!");
+	//panic("free() is not implemented yet...!!");
 
 	//you shold get the size of the given allocation using its address
 	//you need to call sys_freeMem()
 	//refer to the project presentation and documentation for details
 
+	for(int i=0; i<idx; i++) {
+		if (virtual_address == (void*)uHeapArr[i].first) {
+			int fIDX = (uHeapArr[i].first-USER_HEAP_START)/PAGE_SIZE;
+			uint32 finalAdd = (fIDX + uHeapArr[i].size)/PAGE_SIZE;
+
+			for(uint32 j=(uint32)fIDX; j<finalAdd; j+=PAGE_SIZE)
+				sys_freeMem((uint32)j, fIDX);
+
+			uHeapArr[i].first = uHeapArr[i].size = 0;
+		}
+	}
 }
 
 
