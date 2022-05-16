@@ -2,21 +2,51 @@
 #include <kern/kheap.h>
 #include <kern/memory_manager.h>
 
+#define Mega (1024*1024)
+#define kilo (1024)
+
 //2022: NOTE: All kernel heap allocations are multiples of PAGE_SIZE (4KB)
 
-
-int count =0;
-
-
 uint32 startAdd = KERNEL_HEAP_START;
-int idx = 0;
+int IDX = 0;
+
 struct KernelHEAP {
 	uint32 first;
 	uint32 last;
 	int size;
+} kHeapArr[Mega];
 
-} kHeapArr[1024*1024];
+uint32* nextFitAlgo(unsigned int size) {
+	uint32 x = 0, y = 0;
+	struct Frame_Info* framePTR;
 
+	for(uint32 i = startAdd; i <= KERNEL_HEAP_MAX; i += PAGE_SIZE) {
+		if(i == KERNEL_HEAP_MAX) i = KERNEL_HEAP_START;
+		if(i == startAdd) y++;
+		if(y == 2) if (x != kHeapArr[IDX].size) return NULL;
+
+		uint32* ptr_page;
+		framePTR = get_frame_info(ptr_page_directory, (void*)i, &ptr_page);
+		if (framePTR == NULL) {
+			if (x == 0) kHeapArr[IDX].first = i;
+			kHeapArr[IDX].last = i;
+			x += PAGE_SIZE;
+		} else x = 0;
+
+		if (x == kHeapArr[IDX].size) break;
+	}
+
+	if (x == kHeapArr[IDX].size) {
+		for (uint32 j=kHeapArr[IDX].first; j <= kHeapArr[IDX].last; j+=PAGE_SIZE) {
+			allocate_frame(&framePTR);
+			map_frame(ptr_page_directory, framePTR, (void*)j, PERM_PRESENT|PERM_WRITEABLE);
+		}
+	}
+
+	startAdd = kHeapArr[IDX].last + PAGE_SIZE;
+	IDX++;
+	return (void*) kHeapArr[IDX-1].first;
+}
 
 void* kmalloc(unsigned int size) {
 	//TODO: [PROjECT 2022 - [1] Kernel Heap] kmalloc()
@@ -34,60 +64,18 @@ void* kmalloc(unsigned int size) {
 	// and "isKHeapPlacementStrategyNEXTFIT() ..."
 	//functions to check the current strategy
 	//change this "return" according to your answer
-	int count = 0;
-		kHeapArr[idx].size = ROUNDUP(size, PAGE_SIZE);
-		uint32 X = 0;
-		struct Frame_Info*fra;
-		uint32 co = 0;
-		if (isKHeapPlacementStrategyNEXTFIT()) {
-			for (uint32 i = startAdd; i <= KERNEL_HEAP_MAX; i += PAGE_SIZE) {
-				if (i == KERNEL_HEAP_MAX) {
-					i = KERNEL_HEAP_START;
-				}
-				if (i == startAdd) {
-					co++;
-				}
-				if (co == 2) {
-					if (X != kHeapArr[idx].size) {
-						return NULL;
-					}
-				}
 
-				uint32*ptr_page;
-				struct Frame_Info*frame = get_frame_info(ptr_page_directory,
-						(void*) i, &ptr_page);
-				if (frame == NULL) {
-					if (X == 0) {
-						kHeapArr[idx].first = i;
-					}
-					kHeapArr[idx].last = i;
-					X += PAGE_SIZE;
-				} else {
-					X = 0;
-				}
+	kHeapArr[IDX].size = ROUNDUP(size, PAGE_SIZE);
 
-				if (X == kHeapArr[idx].size) {
-					break;
-				}
+	if(isKHeapPlacementStrategyNEXTFIT()) {
+		return nextFitAlgo(size);
+	}
 
-			}
+	if(isKHeapPlacementStrategyBESTFIT()) {
+		// --->>> BONUS -->> BEST FIT -> HERE
+	}
 
-			if (X == kHeapArr[idx].size) {
-
-				for (uint32 j = kHeapArr[idx].first; j <= kHeapArr[idx].last; j +=
-				PAGE_SIZE) {
-					int alloc = allocate_frame(&fra);
-					map_frame(ptr_page_directory, fra, (void*) j,
-					PERM_PRESENT | PERM_WRITEABLE);
-				}
-			}
-			startAdd = kHeapArr[idx].last + PAGE_SIZE;
-			int val = idx;
-			idx++;
-			return (void*) kHeapArr[val].first;
-
-		}
-return NULL;
+	return NULL;
 }
 
 void kfree(void* virtual_address) {
@@ -97,42 +85,27 @@ void kfree(void* virtual_address) {
 
 	//you need to get the size of the given allocation using its address
 	//refer to the project presentation and documentation for details
-	uint32 check=0;
-	uint32 startAddress;
-	uint32 EndAddress;
-	for(int i=0;i<idx;i++)
-	{
-			if((uint32)virtual_address==kHeapArr[i].first)
-			{
-				check=1;
-				startAddress =(uint32)virtual_address;
-				EndAddress=kHeapArr[i].last;
 
-			}
+	uint32 flag = 0, start, end;
 
-
-	}
-	if(check==1)
-	{
-		for( uint32 A = startAddress;A<=EndAddress;A+=PAGE_SIZE)
-		{
-			unmap_frame(ptr_page_directory,(void *)A);
-			uint32*ptr_page;
-
-			get_page_table(ptr_page_directory,(void*)A,&ptr_page);
-			if(ptr_page!=NULL)
-			{
-			ptr_page[PTX(A)]=0;
-			}
-
+	for(int i=0; i<IDX; i++) {
+		if((uint32)virtual_address == kHeapArr[i].first) {
+			flag=1;
+			start = (uint32)virtual_address;
+			end = kHeapArr[i].last;
 		}
-
-
-
 	}
 
-
+	if(flag) {
+		for(uint32 i=start; i<=end; i+=PAGE_SIZE) {
+			unmap_frame(ptr_page_directory, (void*)i);
+			uint32*ptrPT;
+			get_page_table(ptr_page_directory, (void*)i, &ptrPT);
+			if(ptrPT != NULL) ptrPT[PTX(i)] = 0;
+		}
+	}
 }
+
 unsigned int kheap_virtual_address(unsigned int physical_address) {
 	//TODO: [PROJECT 2022 - [3] Kernel Heap] kheap_virtual_address()
 	// Write your code here, remove the panic and write your code
