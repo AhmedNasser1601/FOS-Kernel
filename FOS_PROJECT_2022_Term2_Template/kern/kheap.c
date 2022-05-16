@@ -4,73 +4,19 @@
 
 //2022: NOTE: All kernel heap allocations are multiples of PAGE_SIZE (4KB)
 
+
+int count =0;
+
+
+uint32 startAdd = KERNEL_HEAP_START;
+int idx = 0;
 struct KernelHEAP {
-	uint32 starter;
-	uint32 pages;
-	int first;
-	int last;
-	uint8 allocated;
-} kHeapArr[(KERNEL_HEAP_MAX-KERNEL_HEAP_START)/PAGE_SIZE];
+	uint32 first;
+	uint32 last;
+	int size;
 
-int x=-1, y=-1;
-int fIDX=0, looping=0;
-int IDX=1, kmallocBEGIN=1, freeBEGIN=1;
+} kHeapArr[1024*1024];
 
-uint32 *nextFitAlgo(unsigned int Size) {
-	while(kHeapArr[fIDX].allocated || (kHeapArr[fIDX].pages < Size)) {
-		fIDX = kHeapArr[fIDX].last;
-		if(fIDX == -1) {
-			if(isKHeapPlacementStrategyNEXTFIT() && !looping) {
-				looping = 1;
-				fIDX = 0;
-			}
-			else return NULL;
-		}
-	}
-
-	if(kHeapArr[fIDX].pages != Size) {
-		int lIDX;
-		if(x != -1) {
-			lIDX = x;
-			x = -1;
-		} else if(y != -1) {
-			lIDX = y;
-			y = -1;
-		} else {
-			lIDX = IDX;
-			IDX++;
-		}
-
-		kHeapArr[lIDX].last = kHeapArr[fIDX].last;
-
-		if(kHeapArr[lIDX].last != -1)
-			kHeapArr[kHeapArr[lIDX].last].first = lIDX;
-
-		kHeapArr[lIDX].first = fIDX;
-		kHeapArr[fIDX].last = lIDX;
-
-		kHeapArr[lIDX].allocated = 0;
-		kHeapArr[lIDX].pages = kHeapArr[fIDX].pages - Size;
-		kHeapArr[lIDX].starter = kHeapArr[fIDX].starter + (Size*PAGE_SIZE);
-
-		kHeapArr[fIDX].pages = Size;
-	}
-
-	kHeapArr[fIDX].allocated = 1;
-	uint32 ptrVA = kHeapArr[fIDX].starter;
-
-	for(int i=0; i<Size; i++) {
-		struct Frame_Info* framePTR;
-		if(allocate_frame(&framePTR) != E_NO_MEM) {
-			map_frame(ptr_page_directory, framePTR, (void*)ptrVA, PERM_WRITEABLE|PERM_AVAILABLE);
-			framePTR->va = ptrVA;
-		}
-		ptrVA += PAGE_SIZE;
-	}
-	looping = 0;
-
-	return (void*)kHeapArr[fIDX].starter;
-}
 
 void* kmalloc(unsigned int size) {
 	//TODO: [PROjECT 2022 - [1] Kernel Heap] kmalloc()
@@ -88,24 +34,60 @@ void* kmalloc(unsigned int size) {
 	// and "isKHeapPlacementStrategyNEXTFIT() ..."
 	//functions to check the current strategy
 	//change this "return" according to your answer
+	int count = 0;
+		kHeapArr[idx].size = ROUNDUP(size, PAGE_SIZE);
+		uint32 X = 0;
+		struct Frame_Info*fra;
+		uint32 co = 0;
+		if (isKHeapPlacementStrategyNEXTFIT()) {
+			for (uint32 i = startAdd; i <= KERNEL_HEAP_MAX; i += PAGE_SIZE) {
+				if (i == KERNEL_HEAP_MAX) {
+					i = KERNEL_HEAP_START;
+				}
+				if (i == startAdd) {
+					co++;
+				}
+				if (co == 2) {
+					if (X != kHeapArr[idx].size) {
+						return NULL;
+					}
+				}
 
-	if(kmallocBEGIN) {
-		kHeapArr[0].starter = KERNEL_HEAP_START;
-		kHeapArr[0].pages = (KERNEL_HEAP_MAX-KERNEL_HEAP_START)/PAGE_SIZE;
-		kHeapArr[0].first = kHeapArr[0].last = -1;
-		kHeapArr[0].allocated = 0;
-		kmallocBEGIN = 0;
-	}
+				uint32*ptr_page;
+				struct Frame_Info*frame = get_frame_info(ptr_page_directory,
+						(void*) i, &ptr_page);
+				if (frame == NULL) {
+					if (X == 0) {
+						kHeapArr[idx].first = i;
+					}
+					kHeapArr[idx].last = i;
+					X += PAGE_SIZE;
+				} else {
+					X = 0;
+				}
 
-	if(isKHeapPlacementStrategyNEXTFIT()) {
-		return nextFitAlgo(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
-	}
+				if (X == kHeapArr[idx].size) {
+					break;
+				}
 
-	if(isKHeapPlacementStrategyBESTFIT()) {
-		// --->>> BONUS -->> BEST FIT -> HERE
-	}
+			}
 
-	return NULL;
+			if (X == kHeapArr[idx].size) {
+
+				for (uint32 j = kHeapArr[idx].first; j <= kHeapArr[idx].last; j +=
+				PAGE_SIZE) {
+					int alloc = allocate_frame(&fra);
+					map_frame(ptr_page_directory, fra, (void*) j,
+					PERM_PRESENT | PERM_WRITEABLE);
+				}
+			}
+			startAdd = kHeapArr[idx].last + PAGE_SIZE;
+			int val = idx;
+			idx++;
+			return (void*) kHeapArr[val].first;
+
+		}
+return NULL;
 }
 
 void kfree(void* virtual_address) {
@@ -115,48 +97,42 @@ void kfree(void* virtual_address) {
 
 	//you need to get the size of the given allocation using its address
 	//refer to the project presentation and documentation for details
+	uint32 check=0;
+	uint32 startAddress;
+	uint32 EndAddress;
+	for(int i=0;i<idx;i++)
+	{
+			if((uint32)virtual_address==kHeapArr[i].first)
+			{
+				check=1;
+				startAddress =(uint32)virtual_address;
+				EndAddress=kHeapArr[i].last;
 
-	if(freeBEGIN) {
-		fIDX = 0;
-		freeBEGIN = 0;
+			}
+
+
 	}
+	if(check==1)
+	{
+		for( uint32 A = startAddress;A<=EndAddress;A+=PAGE_SIZE)
+		{
+			unmap_frame(ptr_page_directory,(void *)A);
+			uint32*ptr_page;
 
-	int idx = 0;
-	while(idx != -1) {
-		if(kHeapArr[idx].starter == (uint32) virtual_address) break;
-		idx = kHeapArr[idx].last;
-		if(idx == -1) return;
-	}
+			get_page_table(ptr_page_directory,(void*)A,&ptr_page);
+			if(ptr_page!=NULL)
+			{
+			ptr_page[PTX(A)]=0;
+			}
 
-	kHeapArr[idx].allocated = 0;
-	uint32 pages = kHeapArr[idx].pages;
-
-	if(!isKHeapPlacementStrategyCONTALLOC()) {
-		int first = kHeapArr[idx].first;
-		int last = kHeapArr[idx].last;
-
-		if(last != -1 && !kHeapArr[last].allocated) {
-			kHeapArr[idx].pages += kHeapArr[last].pages;
-			kHeapArr[last].first = idx;
-			kHeapArr[idx].last = kHeapArr[last].last;
-			x = last;
 		}
 
-		first = kHeapArr[idx].first;
-		last = kHeapArr[idx].last;
 
-		if(first != -1 && !kHeapArr[first].allocated) {
-			kHeapArr[first].pages += kHeapArr[idx].pages;
-			kHeapArr[last].first = first;
-			kHeapArr[first].last = last;
-			y = idx;
-		}
+
 	}
 
-	for(int i=0; i<pages; i++, virtual_address+=PAGE_SIZE)
-		unmap_frame(ptr_page_directory,virtual_address);
+
 }
-
 unsigned int kheap_virtual_address(unsigned int physical_address) {
 	//TODO: [PROJECT 2022 - [3] Kernel Heap] kheap_virtual_address()
 	// Write your code here, remove the panic and write your code
