@@ -480,20 +480,129 @@ void page_fault_handler(struct Env * curenv, uint32 fault_va) {
 
 	//refer to the project presentation and documentation for details
 
-	if (env_page_ws_get_size(curenv) >= curenv->page_WS_max_size) {
-		uint32 virAdd = env_page_ws_get_virtual_address(curenv, curenv->page_last_WS_index);
+	uint32* ptrPT = NULL;
+	struct Frame_Info* framePTR[2];
+	uint32 lastIDX = curenv->page_last_WS_index, VIC, empty;
 
-		if(pt_get_page_permissions(curenv, virAdd) & PERM_MODIFIED) {
-			uint32* ptr;
-			struct Frame_Info* framePTR = get_frame_info(curenv->env_page_directory, (void*)virAdd, &ptr);
-			pf_update_env_page(curenv, (void*)virAdd, framePTR);
+	framePTR[0] = get_frame_info(curenv->env_page_directory, (void*)fault_va, &ptrPT);
+
+	if(env_page_ws_get_size(curenv) < curenv->page_WS_max_size) {
+		if (env_page_ws_get_size(curenv) >= curenv->page_WS_max_size) {
+			uint32 virAdd = env_page_ws_get_virtual_address(curenv, curenv->page_last_WS_index);
+
+			if(pt_get_page_permissions(curenv, virAdd) & PERM_MODIFIED) {
+				ptrPT = NULL;
+				framePTR[0] = get_frame_info(curenv->env_page_directory, (void*)virAdd, &ptrPT);
+				pf_update_env_page(curenv, (void*)virAdd, framePTR[0]);
+			}
+
+			unmap_frame(curenv->env_page_directory, (void*)virAdd);
+			env_page_ws_clear_entry(curenv, curenv->page_last_WS_index);
 		}
 
-		unmap_frame(curenv->env_page_directory, (void*)virAdd);
-		env_page_ws_clear_entry(curenv, curenv->page_last_WS_index);
+		placement(curenv, fault_va);
+
+		if((pt_get_page_permissions(curenv, fault_va) & PERM_BUFFERED ) != PERM_BUFFERED) {
+			if (pf_read_env_page( curenv, (uint32*)fault_va) == E_PAGE_NOT_EXIST_IN_PF){
+				if((fault_va >= USTACKBOTTOM) && (fault_va < USTACKTOP)) empty = pf_add_empty_env_page(curenv, fault_va, 0);
+				else panic("\n\n\t=(PANIC)=> Page doesn't exist on PageFile or Stack\n");
+			}
+		}
+
+		if(lastIDX == curenv->page_WS_max_size-1) curenv->page_last_WS_index=0;
+		else curenv->page_last_WS_index = lastIDX+1;
 	}
 
-	placement(curenv, fault_va);
+	else {
+		uint32 FP = curenv->page_last_WS_index, VA, CP, P_PE;
+		bool F1 = 0, F2 = 0;
+
+		while ((F1 == 0) && (F2 == 0)) {
+			CP = curenv->page_last_WS_index;
+			VA = env_page_ws_get_virtual_address(curenv, CP);
+			P_PE = pt_get_page_permissions( curenv, VA);
+
+			if(((P_PE&PERM_USED)==0) && ((P_PE&PERM_MODIFIED)==0)) {
+				VIC = VA ;
+				lastIDX = curenv->page_last_WS_index;
+				env_page_ws_clear_entry(curenv, lastIDX);
+				curenv->page_last_WS_index++;
+				if(curenv->page_last_WS_index == curenv->page_WS_max_size) curenv->page_last_WS_index=0;
+				F2 = 1;
+				break;
+			}
+
+			curenv->page_last_WS_index++;
+
+			if(curenv->page_last_WS_index == curenv->page_WS_max_size) curenv->page_last_WS_index=0;
+			if(curenv->page_last_WS_index == FP && F2==0 ) {
+				while(F1 == 0) {
+					CP = curenv->page_last_WS_index;
+					VA = env_page_ws_get_virtual_address(curenv, CP);
+					P_PE = pt_get_page_permissions(curenv, VA);
+
+					if((P_PE & PERM_USED) == 0) {
+						VIC = VA;
+						lastIDX = curenv->page_last_WS_index;
+						env_page_ws_clear_entry(curenv, lastIDX);
+						curenv->page_last_WS_index++;
+						if(curenv->page_last_WS_index == curenv->page_WS_max_size) curenv->page_last_WS_index=0;
+						F1 = 1;
+						break;
+					}
+
+					pt_set_page_permissions(curenv, VA, 0, PERM_USED);
+					curenv->page_last_WS_index++;
+
+					if(curenv->page_last_WS_index == curenv->page_WS_max_size) curenv->page_last_WS_index=0;
+					if((curenv->page_last_WS_index == FP) && F1==0) break;
+				}
+			}
+		}
+
+		ptrPT = NULL;
+		framePTR[1] = get_frame_info(curenv->env_page_directory, (void*)VIC, &ptrPT);
+		uint32 sizebufferlist = getModifiedBufferLength();
+		framePTR[1]->isBuffered = 1;
+		pt_set_page_permissions(curenv, VIC, PERM_BUFFERED, PERM_PRESENT);
+		P_PE = pt_get_page_permissions(curenv, VIC);
+
+		if((P_PE&PERM_MODIFIED)==PERM_MODIFIED) {
+			bufferList_add_page(&modified_frame_list, framePTR[1]);
+			if(sizebufferlist == LIST_SIZE(&modified_frame_list)) {
+				LIST_FOREACH(framePTR[1], &modified_frame_list) {
+					VA = framePTR[1]->va;
+					int ret1 = pf_update_env_page(curenv, (uint32*)VA, framePTR[1]);
+					pt_set_page_permissions(curenv, VA, 0, PERM_MODIFIED);
+
+					bufferlist_remove_page(&modified_frame_list, framePTR[1]);
+					bufferList_add_page(&free_frame_list, framePTR[1]);
+				}
+			}
+		} else bufferList_add_page(&free_frame_list, framePTR[1]);
+
+		P_PE = pt_get_page_permissions(curenv, fault_va);
+		if((P_PE&PERM_BUFFERED)==PERM_BUFFERED) {
+			pt_set_page_permissions(curenv, fault_va, PERM_PRESENT, PERM_BUFFERED);
+			framePTR[0]->isBuffered = 0;
+			if((P_PE&PERM_MODIFIED)==PERM_MODIFIED) bufferlist_remove_page(&modified_frame_list, framePTR[0]);
+			else bufferlist_remove_page(&free_frame_list, framePTR[0]);
+		}
+		else {
+			allocate_frame(&framePTR[0]);
+			map_frame(curenv->env_page_directory, framePTR[0],(void *)fault_va, PERM_PRESENT|PERM_USER|PERM_WRITEABLE);
+			uint32 EM_P_RE = pf_read_env_page(curenv, (uint32*)fault_va);
+			if(EM_P_RE == E_PAGE_NOT_EXIST_IN_PF) {
+				if((fault_va >= USTACKBOTTOM ) && (fault_va < USTACKTOP)) EM_P_RE=pf_add_empty_env_page(curenv, fault_va, 0);
+				else panic("\n\n\t=(PANIC)=> Page doesn't exist on PageFile or Stack\n");
+			}
+		}
+
+		env_page_ws_set_entry(curenv, lastIDX, fault_va);
+
+		if(lastIDX == curenv->page_WS_max_size-1 ) curenv->page_last_WS_index=0;
+		else curenv->page_last_WS_index = lastIDX+1;
+	}
 
 	//TODO: [PROJECT 2022 - BONUS4] Change WS Size according to Program Priority‌
 }
@@ -502,5 +611,4 @@ void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va)
 {
 	// your code is here, remove the panic and write your code
 	panic("this function is not required...!!");
-
 }
