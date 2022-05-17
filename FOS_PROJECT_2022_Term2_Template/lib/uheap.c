@@ -1,4 +1,3 @@
-
 #include <inc/lib.h>
 
 #define Mega (1024*1024)
@@ -22,14 +21,72 @@
 //==================================================================================//
 
 uint32 startAdd = USER_HEAP_START;
-int idx = 0;
+bool checkList[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE] = {0};
 
-uint32 hFreeArr[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE];
-
-struct UserHEAP {
+struct UserHeap {
 	uint32 first;
-	int size;
+	uint32 size;
 } uHeapArr[(USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE];
+
+uint32* nextFitAlgo(unsigned int size) {
+	uint32 newAdd = startAdd, newSize = 0, tmp;
+	bool flag = 0, found = 0;
+
+	uint32 spacePages = (USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE;
+
+	while(spacePages != 0) {
+		if(checkList[(newAdd-USER_HEAP_START)/PAGE_SIZE]==0 && flag) {
+			newSize += PAGE_SIZE;
+			newAdd += PAGE_SIZE;
+			spacePages--;
+		} else if(checkList[(newAdd-USER_HEAP_START)/PAGE_SIZE]==0 && !flag) {
+			flag = 1;
+			tmp = newAdd;
+			newSize += PAGE_SIZE;
+			newAdd += PAGE_SIZE;
+			spacePages--;
+		} else {
+			if(newSize >= size) {
+				startAdd = tmp;
+				found = 1;
+				break;
+			}
+
+			spacePages -= checkList[(newAdd-USER_HEAP_START)/PAGE_SIZE];
+			newAdd += (checkList[(newAdd-USER_HEAP_START)/PAGE_SIZE] *PAGE_SIZE);
+			flag = newSize = 0;
+		}
+
+		if(newSize >= size) {
+			startAdd = tmp;
+			found = 1;
+			break;
+		}
+
+		if(newAdd >= USER_HEAP_MAX) {
+			flag = newSize = 0;
+			newAdd = USER_HEAP_START;
+		}
+	}
+
+	if(!found) {
+		if(newSize < size) return NULL;
+		else startAdd = tmp;
+	}
+
+	uint32 returnHolder = startAdd;
+
+	newAdd = (startAdd-USER_HEAP_START)/PAGE_SIZE;
+	checkList[newAdd] = size/PAGE_SIZE;
+	sys_allocateMem(startAdd, size);
+
+	uHeapArr[(startAdd-USER_HEAP_START)/PAGE_SIZE].first = startAdd;
+	uHeapArr[(startAdd-USER_HEAP_START)/PAGE_SIZE].size = size;
+
+	if(startAdd+size >= USER_HEAP_MAX) startAdd = USER_HEAP_START;
+
+	return (void*)returnHolder;
+}
 
 void* malloc(uint32 size) {
 	//TODO: [PROJECT 2022 - [9] User Heap malloc()] [User Side]
@@ -44,43 +101,22 @@ void* malloc(uint32 size) {
 	//	3) Call sys_allocateMem to invoke the Kernel for allocation
 	// 	4) Return pointer containing the virtual address of allocated space,
 
-
-	if(sys_isUHeapPlacementStrategyNEXTFIT()) {
-		uHeapArr[idx].size = ROUNDUP(size, PAGE_SIZE);
-		uint32 maxSize = startAdd+size;
-		int flag=0;
-
-		if (uHeapArr[idx].size<maxSize && uHeapArr[idx].size!=0) {
-			for(int i=0; i<((USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE); i++) {
-				flag++;
-				if(hFreeArr[i] != 0) {
-					flag=0;
-				}
-
-				if(flag == (uHeapArr[idx].size/PAGE_SIZE)) {
-					uint32 rem = i-(uHeapArr[idx].size/PAGE_SIZE);
-
-					for(int j=rem; j<=i; j++) {
-						hFreeArr[j] = 1;
-					}
-
-					uHeapArr[idx].first = startAdd = USER_HEAP_START+((rem+1)*PAGE_SIZE);
-
-					sys_allocateMem(uHeapArr[idx].first, uHeapArr[idx].size);
-
-					idx++;
-					return (void*)startAdd;
-				}
-			}
-		}
-	}
-
 	//This function should find the space of the required range
 	// ******** ON 4KB BOUNDARY ******************* //
 
 	//Use sys_isUHeapPlacementStrategyNEXTFIT() and
 	//sys_isUHeapPlacementStrategyBESTFIT() for the bonus
 	//to check the current strategy
+
+	size = ROUNDUP(size, PAGE_SIZE);
+
+	if(sys_isUHeapPlacementStrategyNEXTFIT()) {
+		return nextFitAlgo(size);
+	}
+
+	if(sys_isUHeapPlacementStrategyBESTFIT()) {
+		// --->>> BONUS -->> BEST FIT -> HERE
+	}
 
 	return NULL;
 }
@@ -116,17 +152,18 @@ void free(void* virtual_address) {
 	//you need to call sys_freeMem()
 	//refer to the project presentation and documentation for details
 
-	for(int i=0; i<idx; i++) {
-		if (virtual_address == (void*)uHeapArr[i].first) {
-			int fIDX = (uHeapArr[i].first-USER_HEAP_START)/PAGE_SIZE;
-			uint32 finalAdd = (fIDX + uHeapArr[i].size)/PAGE_SIZE;
+	uint32 x, size;
 
-			for(uint32 j=(uint32)fIDX; j<finalAdd; j+=PAGE_SIZE)
-				sys_freeMem((uint32)j, fIDX);
-
-			uHeapArr[i].first = uHeapArr[i].size = 0;
+	for(int i=0; i < ((USER_HEAP_MAX-USER_HEAP_START)/PAGE_SIZE); i++) {
+		if (uHeapArr[i].first == (uint32)virtual_address) {
+			x = ((uint32)virtual_address-USER_HEAP_START)/PAGE_SIZE;
+			size = uHeapArr[i].size;
+			uHeapArr[i].first = uHeapArr[i].size = checkList[x] = 0;
+			break;
 		}
 	}
+
+	sys_freeMem((uint32)virtual_address, size);
 }
 
 
