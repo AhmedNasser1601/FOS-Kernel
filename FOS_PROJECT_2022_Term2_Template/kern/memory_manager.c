@@ -765,34 +765,34 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size) {
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
 	//   remember that the page table was created using kmalloc so it should be removed using kfree()
 
-	virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
-	uint32* ptrPT = NULL;
+	for(uint32 i=0; i < size; i += PAGE_SIZE) {
+		pf_remove_env_page(e, (virtual_address + i));
 
-	for(uint32 i=virtual_address ; i<virtual_address+size; i+=PAGE_SIZE) {
-		pf_remove_env_page(e, i);
-
-		for(int j=0; j<e->page_WS_max_size; j++) {
-			if(i == env_page_ws_get_virtual_address(e, j)) {
-				unmap_frame(e->env_page_directory, (void*)i);
+		for(uint32 j=0; j < e->page_WS_max_size; j++) {
+			if((virtual_address+i) == env_page_ws_get_virtual_address(e, j)) {
 				env_page_ws_clear_entry(e, j);
 				break;
 			}
 		}
 
-		get_page_table(e->env_page_directory, (void*)i, &ptrPT);
-		int x = 1;
+		unmap_frame(e->env_page_directory, (void*)(virtual_address+i));
 
+		uint32* ptrPT = NULL;
+		get_page_table(e->env_page_directory, (void*)(virtual_address+i), &ptrPT);
 		if(ptrPT != NULL) {
-			for(int j=0; j<kilo; j++) {
-				if(ptrPT[j] != 0) {
-					x = 0;
+			int flag = 0;
+			for(int j=0; j < kilo; j++) {
+				if((uint32)(ptrPT[j] & PERM_PRESENT)) {
+					flag = 1;
 					break;
 				}
 			}
 
-			if(x == 1) {
-				e->env_page_directory[PDX(i)]=0;
-				kfree((void*)ptrPT);
+			if(!flag) {
+				struct Frame_Info* framePTR = to_frame_info(kheap_physical_address((uint32)ptrPT));
+				framePTR->references = 0;
+				free_frame(framePTR);
+				e->env_page_directory[PDX(virtual_address+i)] = 0;
 			}
 		}
 	}
