@@ -116,7 +116,14 @@ unsigned int kheap_virtual_address(unsigned int physical_address) {
 
 	//change this "return" according to your answer
 
-	return frames_info[physical_address>>12].va;
+	struct Frame_Info* phyAddFrame = to_frame_info(physical_address);
+	for(uint32 i=KERNEL_HEAP_START; i<startAdd; i+=PAGE_SIZE) {
+		uint32* framePTR = NULL;
+		if(phyAddFrame == get_frame_info(ptr_page_directory, (void*)i, &framePTR))
+			return i;
+	}
+
+	return 0;
 }
 
 unsigned int kheap_physical_address(unsigned int virtual_address) {
@@ -130,7 +137,8 @@ unsigned int kheap_physical_address(unsigned int virtual_address) {
 	//change this "return" according to your answer
 
 	uint32 *ptPTR = NULL;
-	get_page_table(ptr_page_directory,(uint32*)virtual_address, &ptPTR);
-	if(ptPTR != NULL) return (ptPTR[PTX(virtual_address)] & 0xFFFFF000);
+	get_page_table(ptr_page_directory, (uint32*)virtual_address, &ptPTR);
+	if(ptPTR != NULL)
+		return (ptPTR[PTX(virtual_address)] & 0xFFFFF000);
 	return 0;
 }
