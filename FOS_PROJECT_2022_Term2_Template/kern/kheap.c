@@ -48,6 +48,10 @@ uint32* nextFitAlgo(unsigned int size) {
 	return (void*) kHeapArr[IDX-1].first;
 }
 
+uint32* bestFitAlgo(unsigned int size) {
+	return NULL; //Change this return
+}
+
 void* kmalloc(unsigned int size) {
 	//TODO: [PROjECT 2022 - [1] Kernel Heap] kmalloc()
 	// Write your code here, remove the panic and write your code
@@ -68,42 +72,13 @@ void* kmalloc(unsigned int size) {
 	kHeapArr[IDX].size = ROUNDUP(size, PAGE_SIZE);
 
 	if(isKHeapPlacementStrategyNEXTFIT()) {
+		// --->>> NEXT -->> FIT -> HERE
 		return nextFitAlgo(size);
 	}
 
 	if(isKHeapPlacementStrategyBESTFIT()) {
-		// --->>> BONUS -->> BEST FIT -> HERE
-
-		uint32* ptr=NULL;
-		int numofpages=(size+(PAGE_SIZE-1))/PAGE_SIZE;
-
-		int flag=1,temp;
-		for(int i=KERNEL_HEAP_START;i<KERNEL_HEAP_MAX;i+=PAGE_SIZE)
-		{
-			uint32 *ptr_table = NULL;
-			struct Frame_Info* ptr_frame_info = get_frame_info(ptr_page_directory, (void*)i, &ptr_table);
-			int counter=0,j=i;
-			while(ptr_frame_info == NULL && j < KERNEL_HEAP_MAX)
-			{
-				counter++;
-				ptr_frame_info = get_frame_info(ptr_page_directory,(void*)j, &ptr_table);
-				j+=PAGE_SIZE;
-			}
-			if(flag && counter>numofpages)
-			{
-				temp=counter;
-				ptr=(void*)i;
-				flag=0;
-			}
-
-			else if(counter>numofpages && counter<temp)
-			{
-				temp=counter;
-				ptr=(void*)i;
-			}
-			if(j>i)
-				i=j-PAGE_SIZE;
-		}
+		// --->>> BEST -->> FIT -> HERE
+		return bestFitAlgo(size);
 	}
 
 	return NULL;
