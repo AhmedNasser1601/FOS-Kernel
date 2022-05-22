@@ -73,6 +73,37 @@ void* kmalloc(unsigned int size) {
 
 	if(isKHeapPlacementStrategyBESTFIT()) {
 		// --->>> BONUS -->> BEST FIT -> HERE
+
+		uint32* ptr=NULL;
+		int numofpages=(size+(PAGE_SIZE-1))/PAGE_SIZE;
+
+		int flag=1,temp;
+		for(int i=KERNEL_HEAP_START;i<KERNEL_HEAP_MAX;i+=PAGE_SIZE)
+		{
+			uint32 *ptr_table = NULL;
+			struct Frame_Info* ptr_frame_info = get_frame_info(ptr_page_directory, (void*)i, &ptr_table);
+			int counter=0,j=i;
+			while(ptr_frame_info == NULL && j < KERNEL_HEAP_MAX)
+			{
+				counter++;
+				ptr_frame_info = get_frame_info(ptr_page_directory,(void*)j, &ptr_table);
+				j+=PAGE_SIZE;
+			}
+			if(flag && counter>numofpages)
+			{
+				temp=counter;
+				ptr=(void*)i;
+				flag=0;
+			}
+
+			else if(counter>numofpages && counter<temp)
+			{
+				temp=counter;
+				ptr=(void*)i;
+			}
+			if(j>i)
+				i=j-PAGE_SIZE;
+		}
 	}
 
 	return NULL;
